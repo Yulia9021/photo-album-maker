@@ -5,7 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Конструктор фотоальбома</title>
 <style>
-  :root { --page-w:210mm; --page-h:185mm; --collage-x:10mm; --collage-y:5mm; --collage-w:190mm; --collage-h:175mm; --gap:5mm; --margin:5mm; --placeholder:#f1e8d9; --ink:#333; }
+  :root {
+    --page-w:210mm; --page-h:185mm;
+    --collage-x:10mm; --collage-y:5mm;
+    --collage-w:190mm; --collage-h:175mm;
+    --gap:5mm; --margin:5mm; --placeholder:#f1e8d9; --ink:#333;
+  }
   * { box-sizing:border-box; }
   body { margin:0; background:#f3f3f3; color:var(--ink); font-family:Arial,sans-serif; }
   header { text-align:center; padding:16px 12px 8px; }
@@ -55,12 +60,12 @@
 <body>
 <header>
   <h1>Мой фотоальбом</h1>
-  <p>Лист 210 × 185 мм · область коллажа 190 × 175 мм · 40 страниц</p>
+  <p>Лист 210 × 185 мм · 30 страниц · дополнительный отступ под пружину 5 мм</p>
 </header>
 <main>
   <div class="toolbar">
     <button id="prevBtn" type="button">← Назад</button>
-    <div class="counter" id="pageCounter">Страница 1 из 40</div>
+    <div class="counter" id="pageCounter">Страница 1 из 30</div>
     <button id="nextBtn" type="button">Вперёд →</button>
   </div>
   <p class="hint">Нажмите на пустую рамку, чтобы добавить фото. Чтобы изменить кадрирование, зажмите фото и двигайте пальцем или мышью. Для замены нажмите «Заменить фото».</p>
@@ -69,13 +74,14 @@
     <button id="downloadBtn" type="button">Скачать альбом в PDF</button>
   </div>
   <div class="status" id="status" aria-live="polite"></div>
-  <div class="bottom-note">Область коллажа 190 × 175 мм размещена на листе 210 × 185 мм: по 10 мм слева и справа, по 5 мм сверху и снизу. Между рамками 5 мм. Фотографии остаются в браузере и не загружаются на сайт.</div>
+  <div class="bottom-note">Размер листа 210 × 185 мм. На нечётных страницах макет сдвигается на 5 мм вправо, чтобы оставить дополнительное место слева под пружину; на чётных — на 5 мм влево, чтобы оставить место справа. Размеры рамок и раскладки сохранены. Фотографии остаются в браузере и не загружаются на сайт.</div>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 (() => {
-  const TOTAL_PAGES = 40;
+  const TOTAL_PAGES = 30;
   const PAGE_W = 210, PAGE_H = 185, COLLAGE_X = 10, COLLAGE_Y = 5;
+  const BINDING_EXTRA = 5; // 0,5 см = 5 мм
   const pageEl = document.getElementById('albumPage');
   const counter = document.getElementById('pageCounter');
   const prevBtn = document.getElementById('prevBtn');
@@ -103,6 +109,12 @@
 
   function setStatus(text) { statusEl.textContent = text || ''; }
 
+  // Нумерация для пользователя начинается с 1:
+  // нечётные страницы сдвигаем вправо, чётные — влево.
+  function pageHorizontalShift(pageIndex) {
+    return ((pageIndex + 1) % 2 === 1) ? BINDING_EXTRA : -BINDING_EXTRA;
+  }
+
   function fitPageToScreen() {
     if (window.matchMedia('print').matches) return;
     const wrap = document.querySelector('.page-wrap');
@@ -122,10 +134,12 @@
     const imageRatio = (img.naturalWidth || 1) / (img.naturalHeight || 1);
     if (imageRatio > boxRatio) {
       const visible = boxRatio / imageRatio;
-      return `${visible >= 1 ? 50 : Math.max(0, Math.min(100, ((focus.x - visible/2) / (1-visible))*100))}% 50%`;
+      const x = visible >= 1 ? 50 : Math.max(0, Math.min(100, ((focus.x - visible / 2) / (1 - visible)) * 100));
+      return `${x}% 50%`;
     } else {
       const visible = imageRatio / boxRatio;
-      return `50% ${visible >= 1 ? 50 : Math.max(0, Math.min(100, ((focus.y - visible/2) / (1-visible))*100))}%`;
+      const y = visible >= 1 ? 50 : Math.max(0, Math.min(100, ((focus.y - visible / 2) / (1 - visible)) * 100));
+      return `50% ${y}%`;
     }
   }
 
@@ -133,10 +147,12 @@
     pageEl.innerHTML = '';
     const data = pages[currentPage];
     const layout = layouts[data.layout];
+    const horizontalShift = pageHorizontalShift(currentPage);
+
     layout.forEach((box, i) => {
       const slot = document.createElement('div');
       slot.className = 'slot' + (data.photos[i] ? ' has-photo' : '');
-      slot.style.left = (COLLAGE_X + box.x) + 'mm';
+      slot.style.left = (COLLAGE_X + box.x + horizontalShift) + 'mm';
       slot.style.top = (COLLAGE_Y + box.y) + 'mm';
       slot.style.width = box.w + 'mm';
       slot.style.height = box.h + 'mm';
@@ -152,8 +168,10 @@
         img.addEventListener('pointerdown', e => {
           e.preventDefault();
           e.stopPropagation();
-          activeDrag = { page: currentPage, index: i, startX: e.clientX, startY: e.clientY,
-            focusX: focus.x, focusY: focus.y, img, slot, pointerId: e.pointerId };
+          activeDrag = {
+            page: currentPage, index: i, startX: e.clientX, startY: e.clientY,
+            focusX: focus.x, focusY: focus.y, img, slot, pointerId: e.pointerId
+          };
           try { img.setPointerCapture(e.pointerId); } catch (_) {}
           setStatus('Двигайте фото, чтобы настроить кадрирование. Для замены используйте кнопку в углу.');
         });
@@ -167,16 +185,16 @@
           let nextX = activeDrag.focusX, nextY = activeDrag.focusY;
           if (imageRatio > boxRatio) {
             const visible = boxRatio / imageRatio;
-            nextX = activeDrag.focusX - dx * Math.max(0.05, 1-visible);
+            nextX = activeDrag.focusX - dx * Math.max(0.05, 1 - visible);
           } else {
             const visible = imageRatio / boxRatio;
-            nextY = activeDrag.focusY - dy * Math.max(0.05, 1-visible);
+            nextY = activeDrag.focusY - dy * Math.max(0.05, 1 - visible);
           }
-          const next = {x:Math.max(0,Math.min(1,nextX)), y:Math.max(0,Math.min(1,nextY))};
+          const next = {x:Math.max(0, Math.min(1, nextX)), y:Math.max(0, Math.min(1, nextY))};
           data.focus[i] = next;
           img.style.objectPosition = cssObjectPosition(next, img, slot);
         });
-        const endDrag = e => {
+        const endDrag = () => {
           if (activeDrag && activeDrag.img === img) {
             activeDrag = null;
             setStatus('Положение фото сохранено для этой страницы.');
@@ -229,8 +247,12 @@
     if (inputs[i]) inputs[i].click();
   }
 
-  prevBtn.addEventListener('click', () => { if (currentPage > 0) { currentPage--; buildPage(); setStatus(''); } });
-  nextBtn.addEventListener('click', () => { if (currentPage < TOTAL_PAGES - 1) { currentPage++; buildPage(); setStatus(''); } });
+  prevBtn.addEventListener('click', () => {
+    if (currentPage > 0) { currentPage--; buildPage(); setStatus(''); }
+  });
+  nextBtn.addEventListener('click', () => {
+    if (currentPage < TOTAL_PAGES - 1) { currentPage++; buildPage(); setStatus(''); }
+  });
 
   function loadImage(src) {
     return new Promise((resolve, reject) => {
@@ -250,24 +272,32 @@
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const layout = layouts[pageData.layout];
+    const horizontalShift = pageHorizontalShift(pageIndex);
+
     for (let i = 0; i < layout.length; i++) {
       const src = pageData.photos[i];
       if (!src) continue;
       const img = await loadImage(src);
       const b = layout[i];
-      const x = (COLLAGE_X + b.x) * scale, y = (COLLAGE_Y + b.y) * scale, w = b.w * scale, h = b.h * scale;
+      const x = (COLLAGE_X + b.x + horizontalShift) * scale;
+      const y = (COLLAGE_Y + b.y) * scale;
+      const w = b.w * scale, h = b.h * scale;
       const imgRatio = img.width / img.height, boxRatio = w / h;
       let sw, sh, sx, sy;
       const focus = pageData.focus[i] || {x:0.5,y:0.5};
       if (imgRatio > boxRatio) {
         sh = img.height; sw = sh * boxRatio;
-        sx = Math.max(0, Math.min(img.width - sw, focus.x * img.width - sw / 2)); sy = 0;
+        sx = Math.max(0, Math.min(img.width - sw, focus.x * img.width - sw / 2));
+        sy = 0;
       } else {
         sw = img.width; sh = sw / boxRatio;
-        sx = 0; sy = Math.max(0, Math.min(img.height - sh, focus.y * img.height - sh / 2));
+        sx = 0;
+        sy = Math.max(0, Math.min(img.height - sh, focus.y * img.height - sh / 2));
       }
       ctx.save();
-      ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+      ctx.beginPath();
+      ctx.rect(x, y, w, h);
+      ctx.clip();
       ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
       ctx.restore();
     }
