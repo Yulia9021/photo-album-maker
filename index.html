@@ -86,7 +86,7 @@
   const statusEl = document.getElementById('status');
   let currentPage = 0;
   // Per-photo focal point, stored as normalized image coordinates (0..1).
-  const photoFocus = pages.map(p => p.photos.map(() => ({x:0.5, y:0.5})));
+  let photoFocus = [];
   let activeDrag = null;
 
   // Coordinates are millimetres from the top-left corner.
@@ -111,6 +111,8 @@
     layout: i % layouts.length,
     photos: Array(layouts[i % layouts.length].length).fill(null)
   }));
+
+  photoFocus = pages.map(p => p.photos.map(() => ({x:0.5, y:0.5})));
 
   function setStatus(text) { statusEl.textContent = text || ''; }
 
