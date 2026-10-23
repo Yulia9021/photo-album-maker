@@ -17,15 +17,16 @@
   button:disabled { background:#bbb; cursor:default; }
   .counter { font-weight:bold; min-width:120px; text-align:center; }
   .hint { text-align:center; font-size:13px; color:#666; margin:8px 0 14px; }
-  .page-wrap { width:100%; overflow:hidden; padding:0 0 10px; position:relative; }
-  #albumPage { width:var(--page-w); height:var(--page-h); background:white; position:relative; margin:0; box-shadow:0 2px 12px #0002; overflow:hidden; transform-origin:top left; }
+  .page-wrap { overflow:auto; padding:0 0 10px; width:100%; }
+  #albumPage { width:var(--page-w); height:var(--page-h); background:white; position:relative; margin:0 auto; box-shadow:0 2px 12px #0002; overflow:hidden; transform-origin:top left; }
   .slot { position:absolute; background:var(--placeholder); overflow:hidden; }
   .slot input { display:none; }
-  .slot .photo { width:100%; height:100%; display:block; object-fit:cover; object-position:50% 50%; touch-action:none; user-select:none; -webkit-user-drag:none; }
+  .slot .photo { width:100%; height:100%; display:block; object-fit:cover; object-position:50% 50%; user-select:none; -webkit-user-drag:none; touch-action:none; cursor:grab; }
+  .slot .photo:active { cursor:grabbing; }
   .slot .empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#766e62; font-size:14px; text-align:center; padding:8px; cursor:pointer; }
   .slot.has-photo .empty { display:none; }
-  .slot .replace { display:none !important; }
-  .slot .empty { pointer-events:auto; }
+  .slot .replace { position:absolute; right:4px; top:4px; width:auto; height:auto; border-radius:6px; background:#333b; color:white; padding:7px 9px; font-size:12px; z-index:2; }
+  .slot:not(.has-photo) .replace { display:none; }
   .status { text-align:center; font-size:13px; color:#555; min-height:20px; margin-top:8px; }
   .bottom-note { text-align:center; color:#777; font-size:12px; margin-top:10px; }
   @media(max-width:700px) {
@@ -44,8 +45,8 @@
     body { background:white; }
     header, .toolbar, .hint, .status, .bottom-note { display:none !important; }
     main { padding:0; margin:0; max-width:none; }
-    .page-wrap { overflow:visible; padding:0; display:block; }
-    #albumPage { margin:0; box-shadow:none; }
+    .page-wrap { overflow:visible; padding:0; display:block; height:auto !important; }
+    #albumPage { margin:0; box-shadow:none; transform:none !important; }
     .slot { background:white !important; }
     .slot .empty, .slot .replace { display:none !important; }
   }
@@ -62,7 +63,7 @@
     <div class="counter" id="pageCounter">Страница 1 из 40</div>
     <button id="nextBtn" type="button">Вперёд →</button>
   </div>
-  <p class="hint">Нажмите на пустую рамку, чтобы добавить фото. Чтобы заменить фото — нажмите на него. После добавления фото потяните его пальцем, чтобы передвинуть лицо в рамке.</p>
+  <p class="hint">Нажмите на пустую рамку, чтобы добавить фото. Чтобы изменить кадрирование, зажмите фото и двигайте пальцем или мышью. Для замены нажмите «Заменить фото».</p>
   <div class="page-wrap"><div id="albumPage" aria-label="Страница фотоальбома"></div></div>
   <div class="toolbar" style="margin-top:12px">
     <button id="downloadBtn" type="button">Скачать альбом в PDF</button>
@@ -74,7 +75,7 @@
 <script>
 (() => {
   const TOTAL_PAGES = 40;
-  const PAGE_W = 210, PAGE_H = 185, COLLAGE_X = 10, COLLAGE_Y = 5, COLLAGE_W = 190, COLLAGE_H = 175, MARGIN = 5, GAP = 5;
+  const PAGE_W = 210, PAGE_H = 185, COLLAGE_X = 10, COLLAGE_Y = 5;
   const pageEl = document.getElementById('albumPage');
   const counter = document.getElementById('pageCounter');
   const prevBtn = document.getElementById('prevBtn');
@@ -82,34 +83,23 @@
   const downloadBtn = document.getElementById('downloadBtn');
   const statusEl = document.getElementById('status');
   let currentPage = 0;
-  // Per-photo focal point, stored as normalized image coordinates (0..1).
-  let photoFocus = [];
   let activeDrag = null;
 
-  // Coordinates are millimetres from the top-left corner.
-  // The first five layouts repeat eight times to make 40 pages.
   const layouts = [
-    // Page 1: two small landscape frames on the left, one tall frame on the right.
-    [{x:5,y:5,w:62.5,h:77.5},{x:5,y:87.5,w:62.5,h:77.5},{x:72.5,y:5,w:112.5,h:165}],
-    // Page 2: one photo, centered with equal outside margins.
+    [{x:5,y:5,w:62.5,h:80},{x:5,y:90,w:62.5,h:80},{x:72.5,y:5,w:112.5,h:165}],
     [{x:5,y:5,w:180,h:165}],
-    // Page 3: one large upper-left, two stacked upper-right, three equal along bottom.
     [{x:5,y:5,w:100,h:85},{x:110,y:5,w:75,h:40},{x:110,y:50,w:75,h:40},
      {x:5,y:95,w:56.67,h:75},{x:66.67,y:95,w:56.66,h:75},{x:128.33,y:95,w:56.67,h:75}],
-    // Page 4: four identical photos in a 2 x 2 grid.
-    [{x:5,y:5,w:87.5,h:80},{x:97.5,y:5,w:87.5,h:80},
-     {x:5,y:90,w:87.5,h:80},{x:97.5,y:90,w:87.5,h:80}],
-    // Page 5: two small upper-left, tall upper-right, large lower-left, medium lower-right.
+    [{x:5,y:5,w:87.5,h:80},{x:97.5,y:5,w:87.5,h:80},{x:5,y:90,w:87.5,h:80},{x:97.5,y:90,w:87.5,h:80}],
     [{x:5,y:5,w:45,h:35},{x:55,y:5,w:45,h:35},{x:105,y:5,w:80,h:75},
      {x:5,y:45,w:95,h:125},{x:105,y:85,w:80,h:85}]
   ];
 
   const pages = Array.from({length: TOTAL_PAGES}, (_, i) => ({
     layout: i % layouts.length,
-    photos: Array(layouts[i % layouts.length].length).fill(null)
+    photos: Array(layouts[i % layouts.length].length).fill(null),
+    focus: Array(layouts[i % layouts.length].length).fill(null).map(() => ({x:0.5,y:0.5}))
   }));
-
-  photoFocus = pages.map(p => p.photos.map(() => ({x:0.5, y:0.5})));
 
   function setStatus(text) { statusEl.textContent = text || ''; }
 
@@ -117,14 +107,26 @@
     if (window.matchMedia('print').matches) return;
     const wrap = document.querySelector('.page-wrap');
     const availableWidth = Math.max(1, wrap.clientWidth);
-    // CSS mm units are rendered at 96 CSS px per inch; offsetWidth reads the actual unscaled page width.
-    const pageWidthPx = pageEl.offsetWidth || (PAGE_W * 96 / 25.4);
-    const pageHeightPx = pageEl.offsetHeight || (PAGE_H * 96 / 25.4);
+    const pageWidthPx = PAGE_W * 96 / 25.4;
+    const pageHeightPx = PAGE_H * 96 / 25.4;
     const scale = Math.min(1, availableWidth / pageWidthPx);
     pageEl.style.transform = `scale(${scale})`;
     pageEl.style.marginLeft = `${Math.max(0, (availableWidth - pageWidthPx * scale) / 2)}px`;
     pageEl.style.marginRight = '0';
     wrap.style.height = `${pageHeightPx * scale + 10}px`;
+  }
+
+  function cssObjectPosition(focus, img, slot) {
+    const rect = slot.getBoundingClientRect();
+    const boxRatio = rect.width / Math.max(1, rect.height);
+    const imageRatio = (img.naturalWidth || 1) / (img.naturalHeight || 1);
+    if (imageRatio > boxRatio) {
+      const visible = boxRatio / imageRatio;
+      return `${visible >= 1 ? 50 : Math.max(0, Math.min(100, ((focus.x - visible/2) / (1-visible))*100))}% 50%`;
+    } else {
+      const visible = imageRatio / boxRatio;
+      return `50% ${visible >= 1 ? 50 : Math.max(0, Math.min(100, ((focus.y - visible/2) / (1-visible))*100))}%`;
+    }
   }
 
   function buildPage() {
@@ -145,67 +147,50 @@
         img.src = data.photos[i];
         img.alt = 'Фотография ' + (i + 1);
         img.draggable = false;
-        const focus = photoFocus[currentPage][i] || {x:0.5, y:0.5};
-        img.style.objectPosition = `${focus.x * 100}% ${focus.y * 100}%`;
-        let movedPhoto = false;
+        const focus = data.focus[i] || (data.focus[i] = {x:0.5,y:0.5});
+        img.addEventListener('load', () => { img.style.objectPosition = cssObjectPosition(focus, img, slot); });
         img.addEventListener('pointerdown', e => {
           e.preventDefault();
           e.stopPropagation();
-          movedPhoto = false;
           activeDrag = { page: currentPage, index: i, startX: e.clientX, startY: e.clientY,
             focusX: focus.x, focusY: focus.y, img, slot, pointerId: e.pointerId };
-          if (img.setPointerCapture) img.setPointerCapture(e.pointerId);
-          setStatus('Передвигайте фото пальцем или мышью. Чтобы заменить фото, просто нажмите без движения.');
+          try { img.setPointerCapture(e.pointerId); } catch (_) {}
+          setStatus('Двигайте фото, чтобы настроить кадрирование. Для замены используйте кнопку в углу.');
         });
         img.addEventListener('pointermove', e => {
           if (!activeDrag || activeDrag.img !== img || activeDrag.pointerId !== e.pointerId) return;
-          const moveX = e.clientX - activeDrag.startX;
-          const moveY = e.clientY - activeDrag.startY;
-          if (Math.abs(moveX) + Math.abs(moveY) > 4) movedPhoto = true;
           const rect = slot.getBoundingClientRect();
-          if (!img.naturalWidth || !img.naturalHeight || !rect.width || !rect.height) return;
-          const imageRatio = img.naturalWidth / img.naturalHeight;
-          const boxRatio = rect.width / rect.height;
-          let dx = 0, dy = 0;
+          const imageRatio = (img.naturalWidth || 1) / (img.naturalHeight || 1);
+          const boxRatio = rect.width / Math.max(1, rect.height);
+          const dx = (e.clientX - activeDrag.startX) / Math.max(1, rect.width);
+          const dy = (e.clientY - activeDrag.startY) / Math.max(1, rect.height);
+          let nextX = activeDrag.focusX, nextY = activeDrag.focusY;
           if (imageRatio > boxRatio) {
-            // Horizontal overflow: translate finger movement into object-position percentage.
-            const overflowPx = rect.height * imageRatio - rect.width;
-            if (overflowPx > 0) dx = -moveX / overflowPx;
-          } else if (imageRatio < boxRatio) {
-            // Vertical overflow: translate finger movement into object-position percentage.
-            const overflowPx = rect.width / imageRatio - rect.height;
-            if (overflowPx > 0) dy = -moveY / overflowPx;
+            const visible = boxRatio / imageRatio;
+            nextX = activeDrag.focusX - dx * Math.max(0.05, 1-visible);
+          } else {
+            const visible = imageRatio / boxRatio;
+            nextY = activeDrag.focusY - dy * Math.max(0.05, 1-visible);
           }
-          const next = {
-            x: Math.max(0, Math.min(1, activeDrag.focusX + dx)),
-            y: Math.max(0, Math.min(1, activeDrag.focusY + dy))
-          };
-          photoFocus[currentPage][i] = next;
-          img.style.objectPosition = `${next.x * 100}% ${next.y * 100}%`;
+          const next = {x:Math.max(0,Math.min(1,nextX)), y:Math.max(0,Math.min(1,nextY))};
+          data.focus[i] = next;
+          img.style.objectPosition = cssObjectPosition(next, img, slot);
         });
         const endDrag = e => {
           if (activeDrag && activeDrag.img === img) {
             activeDrag = null;
-            if (movedPhoto) setStatus('Положение фото сохранено для этой страницы.');
+            setStatus('Положение фото сохранено для этой страницы.');
           }
         };
         img.addEventListener('pointerup', endDrag);
         img.addEventListener('pointercancel', endDrag);
-        img.addEventListener('click', e => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (movedPhoto) {
-            movedPhoto = false;
-            return;
-          }
-          input.click();
-        });
         slot.appendChild(img);
       }
+
       const empty = document.createElement('div');
       empty.className = 'empty';
       empty.textContent = data.photos[i] ? '' : '+ Добавить фото';
-      empty.addEventListener('click', () => choosePhoto(i));
+      empty.addEventListener('click', () => { if (!data.photos[i]) choosePhoto(i); });
       slot.appendChild(empty);
 
       const input = document.createElement('input');
@@ -216,10 +201,10 @@
         if (!file) return;
         const reader = new FileReader();
         reader.onload = () => {
-          pages[currentPage].photos[i] = reader.result;
-          photoFocus[currentPage][i] = {x:0.5, y:0.5};
+          data.photos[i] = reader.result;
+          data.focus[i] = {x:0.5,y:0.5};
           buildPage();
-          setStatus('Фото добавлено. Потяните его пальцем или мышью, чтобы настроить кадрирование.');
+          setStatus('Фото добавлено. Зажмите его и двигайте пальцем или мышью, чтобы настроить кадрирование.');
         };
         reader.readAsDataURL(file);
       });
@@ -228,12 +213,9 @@
       const replace = document.createElement('button');
       replace.type = 'button';
       replace.className = 'replace';
-      replace.textContent = data.photos[i] ? 'Заменить фото' : 'Добавить фото';
+      replace.textContent = 'Заменить фото';
       replace.addEventListener('click', e => { e.stopPropagation(); input.click(); });
       slot.appendChild(replace);
-      slot.addEventListener('click', e => {
-        if (e.target === slot) input.click();
-      });
       pageEl.appendChild(slot);
     });
     counter.textContent = `Страница ${currentPage + 1} из ${TOTAL_PAGES}`;
@@ -259,8 +241,8 @@
     });
   }
 
-  async function drawPageToCanvas(pageData) {
-    const scale = 4; // 4 px per mm for a sharp PDF image
+  async function drawPageToCanvas(pageData, pageIndex) {
+    const scale = 4;
     const canvas = document.createElement('canvas');
     canvas.width = PAGE_W * scale;
     canvas.height = PAGE_H * scale;
@@ -276,7 +258,7 @@
       const x = (COLLAGE_X + b.x) * scale, y = (COLLAGE_Y + b.y) * scale, w = b.w * scale, h = b.h * scale;
       const imgRatio = img.width / img.height, boxRatio = w / h;
       let sw, sh, sx, sy;
-      const focus = photoFocus[pages.indexOf(pageData)][i] || {x:0.5, y:0.5};
+      const focus = pageData.focus[i] || {x:0.5,y:0.5};
       if (imgRatio > boxRatio) {
         sh = img.height; sw = sh * boxRatio;
         sx = Math.max(0, Math.min(img.width - sw, focus.x * img.width - sw / 2)); sy = 0;
@@ -304,7 +286,7 @@
       for (let p = 0; p < TOTAL_PAGES; p++) {
         setStatus(`Подготавливаю PDF: страница ${p + 1} из ${TOTAL_PAGES}…`);
         if (p > 0) pdf.addPage([PAGE_W, PAGE_H], 'landscape');
-        const canvas = await drawPageToCanvas(pages[p]);
+        const canvas = await drawPageToCanvas(pages[p], p);
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG', 0, 0, PAGE_W, PAGE_H, undefined, 'FAST');
         await new Promise(resolve => setTimeout(resolve, 0));
       }
