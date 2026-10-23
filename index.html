@@ -17,17 +17,14 @@
   button:disabled { background:#bbb; cursor:default; }
   .counter { font-weight:bold; min-width:120px; text-align:center; }
   .hint { text-align:center; font-size:13px; color:#666; margin:8px 0 14px; }
-  .page-wrap { overflow:auto; padding:0 0 10px; }
-  #albumPage { width:var(--page-w); height:var(--page-h); background:white; position:relative; margin:0 auto; box-shadow:0 2px 12px #0002; overflow:hidden; }
+  .page-wrap { width:100%; overflow:hidden; padding:0 0 10px; position:relative; }
+  #albumPage { width:var(--page-w); height:var(--page-h); background:white; position:relative; margin:0; box-shadow:0 2px 12px #0002; overflow:hidden; transform-origin:top left; }
   .slot { position:absolute; background:var(--placeholder); overflow:hidden; }
   .slot input { display:none; }
-  .slot .photo { width:100%; height:100%; display:block; object-fit:cover; object-position:center; }
+  .slot .photo { width:100%; height:100%; display:block; object-fit:cover; object-position:50% 50%; touch-action:none; user-select:none; -webkit-user-drag:none; }
   .slot .empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#766e62; font-size:14px; text-align:center; padding:8px; cursor:pointer; }
   .slot.has-photo .empty { display:none; }
-  .slot .replace { position:absolute; inset:0; width:100%; height:100%; border-radius:0; background:transparent; color:transparent; padding:0; opacity:0; }
-  .slot.has-photo .replace { opacity:0; }
-  .slot.has-photo:hover .replace { opacity:1; background:#0005; color:white; }
-  .slot:not(.has-photo) .replace { display:none; }
+  .slot .replace { display:none !important; }
   .slot .empty { pointer-events:auto; }
   .status { text-align:center; font-size:13px; color:#555; min-height:20px; margin-top:8px; }
   .bottom-note { text-align:center; color:#777; font-size:12px; margin-top:10px; }
@@ -120,8 +117,9 @@
     if (window.matchMedia('print').matches) return;
     const wrap = document.querySelector('.page-wrap');
     const availableWidth = Math.max(1, wrap.clientWidth);
-    const pageWidthPx = PAGE_W * 96 / 25.4;
-    const pageHeightPx = PAGE_H * 96 / 25.4;
+    // CSS mm units are rendered at 96 CSS px per inch; offsetWidth reads the actual unscaled page width.
+    const pageWidthPx = pageEl.offsetWidth || (PAGE_W * 96 / 25.4);
+    const pageHeightPx = pageEl.offsetHeight || (PAGE_H * 96 / 25.4);
     const scale = Math.min(1, availableWidth / pageWidthPx);
     pageEl.style.transform = `scale(${scale})`;
     pageEl.style.marginLeft = `${Math.max(0, (availableWidth - pageWidthPx * scale) / 2)}px`;
@@ -149,27 +147,34 @@
         img.draggable = false;
         const focus = photoFocus[currentPage][i] || {x:0.5, y:0.5};
         img.style.objectPosition = `${focus.x * 100}% ${focus.y * 100}%`;
+        let movedPhoto = false;
         img.addEventListener('pointerdown', e => {
           e.preventDefault();
           e.stopPropagation();
+          movedPhoto = false;
           activeDrag = { page: currentPage, index: i, startX: e.clientX, startY: e.clientY,
             focusX: focus.x, focusY: focus.y, img, slot, pointerId: e.pointerId };
-          img.setPointerCapture(e.pointerId);
-          setStatus('Передвигайте фото пальцем. Отпустите, когда лицо будет по центру.');
+          if (img.setPointerCapture) img.setPointerCapture(e.pointerId);
+          setStatus('Передвигайте фото пальцем или мышью. Чтобы заменить фото, просто нажмите без движения.');
         });
         img.addEventListener('pointermove', e => {
           if (!activeDrag || activeDrag.img !== img || activeDrag.pointerId !== e.pointerId) return;
+          const moveX = e.clientX - activeDrag.startX;
+          const moveY = e.clientY - activeDrag.startY;
+          if (Math.abs(moveX) + Math.abs(moveY) > 4) movedPhoto = true;
           const rect = slot.getBoundingClientRect();
+          if (!img.naturalWidth || !img.naturalHeight || !rect.width || !rect.height) return;
           const imageRatio = img.naturalWidth / img.naturalHeight;
           const boxRatio = rect.width / rect.height;
-          // Convert finger movement into movement of the crop window across the source image.
           let dx = 0, dy = 0;
           if (imageRatio > boxRatio) {
-            const visibleFraction = boxRatio / imageRatio;
-            dx = -(e.clientX - activeDrag.startX) / Math.max(1, rect.width) * visibleFraction;
-          } else {
-            const visibleFraction = imageRatio / boxRatio;
-            dy = -(e.clientY - activeDrag.startY) / Math.max(1, rect.height) * visibleFraction;
+            // Horizontal overflow: translate finger movement into object-position percentage.
+            const overflowPx = rect.height * imageRatio - rect.width;
+            if (overflowPx > 0) dx = -moveX / overflowPx;
+          } else if (imageRatio < boxRatio) {
+            // Vertical overflow: translate finger movement into object-position percentage.
+            const overflowPx = rect.width / imageRatio - rect.height;
+            if (overflowPx > 0) dy = -moveY / overflowPx;
           }
           const next = {
             x: Math.max(0, Math.min(1, activeDrag.focusX + dx)),
@@ -181,11 +186,20 @@
         const endDrag = e => {
           if (activeDrag && activeDrag.img === img) {
             activeDrag = null;
-            setStatus('Положение фото сохранено для этой страницы.');
+            if (movedPhoto) setStatus('Положение фото сохранено для этой страницы.');
           }
         };
         img.addEventListener('pointerup', endDrag);
         img.addEventListener('pointercancel', endDrag);
+        img.addEventListener('click', e => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (movedPhoto) {
+            movedPhoto = false;
+            return;
+          }
+          input.click();
+        });
         slot.appendChild(img);
       }
       const empty = document.createElement('div');
@@ -218,7 +232,7 @@
       replace.addEventListener('click', e => { e.stopPropagation(); input.click(); });
       slot.appendChild(replace);
       slot.addEventListener('click', e => {
-        if (e.target === slot || e.target.classList.contains('photo')) input.click();
+        if (e.target === slot) input.click();
       });
       pageEl.appendChild(slot);
     });
