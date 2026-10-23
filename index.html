@@ -1,69 +1,76 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Мой фотоальбом</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Конструктор фотоальбома</title>
 <style>
-:root { --page-w: 190mm; --page-h: 175mm; --gap: .5mm; --paper: #fff; --placeholder: #f1e8d9; --ink: #333; }
-* { box-sizing: border-box; }
-body { margin:0; font-family: Arial, sans-serif; color:var(--ink); background:#f4f4f4; }
-header { padding:16px; text-align:center; background:white; border-bottom:1px solid #ddd; }
-h1 { margin:0 0 6px; font-size:24px; }
-header p { margin:0; color:#666; font-size:14px; }
-main { max-width:1000px; margin:18px auto; padding:0 14px 30px; }
-.toolbar { display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
-button { border:0; border-radius:8px; padding:10px 15px; background:#333; color:white; font-size:15px; cursor:pointer; }
-button:disabled { opacity:.35; cursor:default; }
-#pageCounter { min-width:100px; text-align:center; font-weight:bold; }
-.hint { font-size:13px; color:#666; text-align:center; margin:0 0 12px; }
-.page-wrap { display:flex; justify-content:center; overflow:auto; padding:5px 0 15px; }
-#albumPage { width:min(100%, 760px); aspect-ratio:190 / 175; background:white; position:relative; box-shadow:0 3px 15px #0002; overflow:hidden; }
-.slot { position:absolute; overflow:hidden; background:var(--placeholder); touch-action:pan-y; }
-.slot img { width:100%; height:100%; display:block; object-fit:cover; object-position:50% 50%; user-select:none; -webkit-user-drag:none; }
-.slot .empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#897d6e; font-size:clamp(10px,1.6vw,16px); text-align:center; padding:4px; pointer-events:none; }
-.slot input { display:none; }
-.slot .change { position:absolute; bottom:5px; left:50%; transform:translateX(-50%); background:#333d; font-size:12px; padding:6px 9px; white-space:nowrap; }
-.slot.has-photo { background:white; }
-.slot.has-photo .empty { display:none; }
-.slot.has-photo .change { opacity:0; transition:opacity .2s; }
-.slot.has-photo:hover .change { opacity:1; }
-.crop-note { text-align:center; font-size:12px; color:#666; margin:0 0 10px; }
-.status { text-align:center; font-size:13px; min-height:18px; margin-top:8px; color:#555; }
-#downloadBtn { background:#176b45; }
-@media(max-width:600px) {
- h1 {font-size:20px}
- main {margin-top:12px;padding:0 8px 20px}
- button {padding:9px 11px;font-size:14px}
- #albumPage {width:100%}
-}
+  :root { --page-w:210mm; --page-h:185mm; --collage-x:10mm; --collage-y:5mm; --collage-w:190mm; --collage-h:175mm; --gap:5mm; --margin:5mm; --placeholder:#f1e8d9; --ink:#333; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#f3f3f3; color:var(--ink); font-family:Arial,sans-serif; }
+  header { text-align:center; padding:16px 12px 8px; }
+  h1 { margin:0 0 5px; font-size:24px; }
+  header p { margin:0; color:#666; font-size:14px; }
+  main { max-width:1000px; margin:0 auto; padding:12px 14px 28px; }
+  .toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:10px; margin-bottom:10px; }
+  button { border:0; border-radius:7px; background:#333; color:#fff; padding:10px 15px; font-size:14px; cursor:pointer; }
+  button:disabled { background:#bbb; cursor:default; }
+  .counter { font-weight:bold; min-width:120px; text-align:center; }
+  .hint { text-align:center; font-size:13px; color:#666; margin:8px 0 14px; }
+  .page-wrap { overflow:auto; padding:0 0 10px; }
+  #albumPage { width:var(--page-w); height:var(--page-h); background:white; position:relative; margin:0 auto; box-shadow:0 2px 12px #0002; overflow:hidden; }
+  .slot { position:absolute; background:var(--placeholder); overflow:hidden; }
+  .slot input { display:none; }
+  .slot .photo { width:100%; height:100%; display:block; object-fit:cover; object-position:center; }
+  .slot .empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#766e62; font-size:14px; text-align:center; padding:8px; cursor:pointer; }
+  .slot.has-photo .empty { display:none; }
+  .slot .replace { position:absolute; inset:0; width:100%; height:100%; border-radius:0; background:transparent; color:transparent; padding:0; opacity:0; }
+  .slot.has-photo .replace { opacity:0; }
+  .slot.has-photo:hover .replace { opacity:1; background:#0005; color:white; }
+  .slot:not(.has-photo) .replace { display:none; }
+  .slot .empty { pointer-events:auto; }
+  .status { text-align:center; font-size:13px; color:#555; min-height:20px; margin-top:8px; }
+  .bottom-note { text-align:center; color:#777; font-size:12px; margin-top:10px; }
+  @media(max-width:700px) {
+    #albumPage { transform-origin:top left; margin:0; }
+    .page-wrap { display:flex; justify-content:center; }
+  }
+  @page { size:210mm 185mm; margin:0; }
+  @media print {
+    body { background:white; }
+    header, .toolbar, .hint, .status, .bottom-note { display:none !important; }
+    main { padding:0; margin:0; max-width:none; }
+    .page-wrap { overflow:visible; padding:0; display:block; }
+    #albumPage { margin:0; box-shadow:none; }
+    .slot { background:white !important; }
+    .slot .empty, .slot .replace { display:none !important; }
+  }
 </style>
 </head>
 <body>
 <header>
   <h1>Мой фотоальбом</h1>
-  <p>Размер страницы: 190 × 175 мм · 40 страниц</p>
+  <p>Лист 210 × 185 мм · область коллажа 190 × 175 мм · 40 страниц</p>
 </header>
 <main>
   <div class="toolbar">
     <button id="prevBtn" type="button">← Назад</button>
-    <span id="pageCounter">Страница 1 из 40</span>
+    <div class="counter" id="pageCounter">Страница 1 из 40</div>
     <button id="nextBtn" type="button">Вперёд →</button>
   </div>
-  <p class="hint">Нажмите «Добавить фото» в пустом окошке. Чтобы заменить фото, нажмите на него.</p>
+  <p class="hint">Нажмите на пустую рамку, чтобы добавить фото. Чтобы заменить фото, нажмите на него.</p>
   <div class="page-wrap"><div id="albumPage" aria-label="Страница фотоальбома"></div></div>
-  <p class="crop-note">Фото автоматически заполняет рамку. После загрузки можно подвинуть изображение пальцем или мышью.</p>
-  <div class="toolbar">
+  <div class="toolbar" style="margin-top:12px">
     <button id="downloadBtn" type="button">Скачать альбом в PDF</button>
   </div>
-  <div class="status" id="status"></div>
+  <div class="status" id="status" aria-live="polite"></div>
+  <div class="bottom-note">Область коллажа 190 × 175 мм размещена на листе 210 × 185 мм: по 10 мм слева и справа, по 5 мм сверху и снизу. Между рамками 5 мм. Фотографии остаются в браузере и не загружаются на сайт.</div>
 </main>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 (() => {
   const TOTAL_PAGES = 40;
-  const GAP = 0.5 / 190 * 100; // 0.5 mm expressed as percent of page width; layouts use a proportional gap.
+  const PAGE_W = 210, PAGE_H = 185, COLLAGE_X = 10, COLLAGE_Y = 5, COLLAGE_W = 190, COLLAGE_H = 175, MARGIN = 5, GAP = 5;
   const pageEl = document.getElementById('albumPage');
   const counter = document.getElementById('pageCounter');
   const prevBtn = document.getElementById('prevBtn');
@@ -71,26 +78,32 @@ button:disabled { opacity:.35; cursor:default; }
   const downloadBtn = document.getElementById('downloadBtn');
   const statusEl = document.getElementById('status');
   let currentPage = 0;
-  // Every page has a fixed layout. The first five layouts repeat to fill 40 pages.
-  // Coordinates are percentages of the 190 x 175 mm page.
+
+  // Coordinates are millimetres from the top-left corner.
+  // The first five layouts repeat eight times to make 40 pages.
   const layouts = [
-    // Page 1: two small photos stacked on the left, one large portrait on the right.
-    [{x:5,y:7,w:35,h:39},{x:5,y:54,w:35,h:39},{x:43,y:7,w:52,h:86}],
-    // Page 2: one large photo, with a small white margin around it.
-    [{x:5,y:5,w:90,h:90}],
-    // Page 3: one large upper-left photo, two small stacked upper-right, three small across the bottom.
-    [{x:5,y:5,w:56,h:49},{x:64,y:5,w:31,h:22},{x:64,y:32,w:31,h:22},{x:5,y:61,w:27,h:32},{x:36.5,y:61,w:27,h:32},{x:68,y:61,w:27,h:32}],
-    // Page 4: four photos in a 2 x 2 grid.
-    [{x:5,y:5,w:43.5,h:42},{x:51.5,y:5,w:43.5,h:42},{x:5,y:53,h:43.5,w:42},{x:51.5,y:53,w:43.5,h:42}],
-    // Page 5: two small upper-left, one portrait upper-right, one large lower-left, one lower-right.
-    [{x:5,y:5,w:28,h:25},{x:36,y:5,w:28,h:25},{x:67,y:5,w:28,h:43},{x:5,y:35,h:59,w:58},{x:67,y:54,w:28,h:39}]
+    // Page 1: two small landscape frames on the left, one tall frame on the right.
+    [{x:5,y:5,w:62.5,h:47.5},{x:5,y:57.5,w:62.5,h:47.5},{x:72.5,y:5,w:112.5,h:165}],
+    // Page 2: one photo, centered with equal outside margins.
+    [{x:5,y:5,w:180,h:165}],
+    // Page 3: one large upper-left, two stacked upper-right, three equal along bottom.
+    [{x:5,y:5,w:100,h:85},{x:110,y:5,w:75,h:40},{x:110,y:50,w:75,h:40},
+     {x:5,y:95,w:56.67,h:75},{x:66.67,y:95,w:56.66,h:75},{x:128.33,y:95,w:56.67,h:75}],
+    // Page 4: four identical photos in a 2 x 2 grid.
+    [{x:5,y:5,w:87.5,h:80},{x:97.5,y:5,w:87.5,h:80},
+     {x:5,y:90,w:87.5,h:80},{x:97.5,y:90,w:87.5,h:80}],
+    // Page 5: two small upper-left, tall upper-right, large lower-left, medium lower-right.
+    [{x:5,y:5,w:45,h:35},{x:55,y:5,w:45,h:35},{x:105,y:5,w:80,h:75},
+     {x:5,y:45,w:95,h:125},{x:105,y:85,w:80,h:85}]
   ];
-  const pages = Array.from({length: TOTAL_PAGES}, (_, p) => ({
-    layout: p % layouts.length,
-    photos: Array(layouts[p % layouts.length].length).fill(null)
+
+  const pages = Array.from({length: TOTAL_PAGES}, (_, i) => ({
+    layout: i % layouts.length,
+    photos: Array(layouts[i % layouts.length].length).fill(null)
   }));
 
   function setStatus(text) { statusEl.textContent = text || ''; }
+
   function buildPage() {
     pageEl.innerHTML = '';
     const data = pages[currentPage];
@@ -98,65 +111,63 @@ button:disabled { opacity:.35; cursor:default; }
     layout.forEach((box, i) => {
       const slot = document.createElement('div');
       slot.className = 'slot' + (data.photos[i] ? ' has-photo' : '');
-      slot.style.left = box.x + '%';
-      slot.style.top = box.y + '%';
-      slot.style.width = box.w + '%';
-      slot.style.height = box.h + '%';
-      const img = document.createElement('img');
+      slot.style.left = (COLLAGE_X + box.x) + 'mm';
+      slot.style.top = (COLLAGE_Y + box.y) + 'mm';
+      slot.style.width = box.w + 'mm';
+      slot.style.height = box.h + 'mm';
+
       if (data.photos[i]) {
-        img.src = data.photos[i].src;
-        img.style.objectPosition = `${data.photos[i].px}% ${data.photos[i].py}%`;
-      } else {
-        img.style.display = 'none';
+        const img = document.createElement('img');
+        img.className = 'photo';
+        img.src = data.photos[i];
+        img.alt = 'Фотография ' + (i + 1);
+        slot.appendChild(img);
       }
       const empty = document.createElement('div');
       empty.className = 'empty';
-      empty.textContent = '＋ Добавить фото';
+      empty.textContent = data.photos[i] ? '' : '+ Добавить фото';
+      empty.addEventListener('click', () => choosePhoto(i));
+      slot.appendChild(empty);
+
       const input = document.createElement('input');
-      input.type = 'file'; input.accept = 'image/*';
-      const change = document.createElement('button');
-      change.type = 'button'; change.className = 'change';
-      change.textContent = data.photos[i] ? 'Заменить фото' : 'Добавить фото';
-      change.addEventListener('click', e => { e.stopPropagation(); input.click(); });
-      slot.addEventListener('click', () => input.click());
-      input.addEventListener('change', () => {
-        const file = input.files && input.files[0];
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.addEventListener('change', e => {
+        const file = e.target.files && e.target.files[0];
         if (!file) return;
-        if (!file.type.startsWith('image/')) { setStatus('Пожалуйста, выберите файл изображения.'); return; }
         const reader = new FileReader();
         reader.onload = () => {
-          data.photos[i] = {src: reader.result, px:50, py:50};
-          buildPage(); setStatus('Фото добавлено. Оно останется в этом альбоме, пока вы не закроете или не обновите страницу.');
+          pages[currentPage].photos[i] = reader.result;
+          buildPage();
+          setStatus('Фото добавлено. Оно автоматически обрезано по размеру рамки.');
         };
         reader.readAsDataURL(file);
       });
-      slot.append(img, empty, input, change);
-      // Drag to reposition the crop within a photo frame.
-      let dragging = false, startX = 0, startY = 0, startPX = 50, startPY = 50;
-      slot.addEventListener('pointerdown', e => {
-        if (!data.photos[i] || e.target === change) return;
-        dragging = true; startX = e.clientX; startY = e.clientY;
-        startPX = data.photos[i].px; startPY = data.photos[i].py;
-        slot.setPointerCapture(e.pointerId);
+      slot.appendChild(input);
+
+      const replace = document.createElement('button');
+      replace.type = 'button';
+      replace.className = 'replace';
+      replace.textContent = data.photos[i] ? 'Заменить фото' : 'Добавить фото';
+      replace.addEventListener('click', e => { e.stopPropagation(); input.click(); });
+      slot.appendChild(replace);
+      slot.addEventListener('click', e => {
+        if (e.target === slot || e.target.classList.contains('photo')) input.click();
       });
-      slot.addEventListener('pointermove', e => {
-        if (!dragging || !data.photos[i]) return;
-        const dx = (e.clientX - startX) / Math.max(1, slot.clientWidth) * 100;
-        const dy = (e.clientY - startY) / Math.max(1, slot.clientHeight) * 100;
-        data.photos[i].px = Math.max(0, Math.min(100, startPX - dx));
-        data.photos[i].py = Math.max(0, Math.min(100, startPY - dy));
-        img.style.objectPosition = `${data.photos[i].px}% ${data.photos[i].py}%`;
-      });
-      slot.addEventListener('pointerup', () => { dragging = false; });
-      slot.addEventListener('pointercancel', () => { dragging = false; });
       pageEl.appendChild(slot);
     });
     counter.textContent = `Страница ${currentPage + 1} из ${TOTAL_PAGES}`;
     prevBtn.disabled = currentPage === 0;
     nextBtn.disabled = currentPage === TOTAL_PAGES - 1;
   }
-  prevBtn.addEventListener('click', () => { if (currentPage > 0) currentPage--; buildPage(); setStatus(''); });
-  nextBtn.addEventListener('click', () => { if (currentPage < TOTAL_PAGES - 1) currentPage++; buildPage(); setStatus(''); });
+
+  function choosePhoto(i) {
+    const inputs = pageEl.querySelectorAll('input[type="file"]');
+    if (inputs[i]) inputs[i].click();
+  }
+
+  prevBtn.addEventListener('click', () => { if (currentPage > 0) { currentPage--; buildPage(); setStatus(''); } });
+  nextBtn.addEventListener('click', () => { if (currentPage < TOTAL_PAGES - 1) { currentPage++; buildPage(); setStatus(''); } });
 
   function loadImage(src) {
     return new Promise((resolve, reject) => {
@@ -166,51 +177,54 @@ button:disabled { opacity:.35; cursor:default; }
       img.src = src;
     });
   }
+
   async function drawPageToCanvas(pageData) {
+    const scale = 4; // 4 px per mm for a sharp PDF image
     const canvas = document.createElement('canvas');
-    const scale = 4; // 4 pixels per mm for a sharp export.
-    canvas.width = 190 * scale; canvas.height = 175 * scale;
+    canvas.width = PAGE_W * scale;
+    canvas.height = PAGE_H * scale;
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     const layout = layouts[pageData.layout];
-    for (let i=0; i<layout.length; i++) {
-      const photo = pageData.photos[i];
-      if (!photo) continue; // empty frames remain white in the exported PDF.
-      const img = await loadImage(photo.src);
+    for (let i = 0; i < layout.length; i++) {
+      const src = pageData.photos[i];
+      if (!src) continue;
+      const img = await loadImage(src);
       const b = layout[i];
-      const x = b.x / 100 * canvas.width, y = b.y / 100 * canvas.height;
-      const w = b.w / 100 * canvas.width, h = b.h / 100 * canvas.height;
-      const gapPx = 0.5 * scale;
-      // Keep a 0.5 mm white gap between frames, without adding visible borders.
-      const ix = x + gapPx/2, iy = y + gapPx/2, iw = Math.max(1,w-gapPx), ih = Math.max(1,h-gapPx);
-      const scaleCover = Math.max(iw / img.width, ih / img.height);
-      const sw = iw / scaleCover, sh = ih / scaleCover;
-      const sx = (img.width - sw) * photo.px / 100;
-      const sy = (img.height - sh) * photo.py / 100;
-      ctx.save(); ctx.beginPath(); ctx.rect(ix, iy, iw, ih); ctx.clip();
-      ctx.drawImage(img, sx, sy, sw, sh, ix, iy, iw, ih);
+      const x = (COLLAGE_X + b.x) * scale, y = (COLLAGE_Y + b.y) * scale, w = b.w * scale, h = b.h * scale;
+      const imgRatio = img.width / img.height, boxRatio = w / h;
+      let sw, sh, sx, sy;
+      if (imgRatio > boxRatio) {
+        sh = img.height; sw = sh * boxRatio; sx = (img.width - sw) / 2; sy = 0;
+      } else {
+        sw = img.width; sh = sw / boxRatio; sx = 0; sy = (img.height - sh) / 2;
+      }
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+      ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
       ctx.restore();
     }
     return canvas;
   }
+
   downloadBtn.addEventListener('click', async () => {
     if (!window.jspdf || !window.jspdf.jsPDF) {
-      setStatus('Не удалось загрузить модуль PDF. Проверьте подключение к интернету и попробуйте ещё раз.');
+      setStatus('Не удалось загрузить PDF-модуль. Проверьте подключение к интернету и обновите страницу.');
       return;
     }
     downloadBtn.disabled = true;
-    setStatus('Готовим PDF… Не закрывайте страницу.');
     try {
       const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({orientation:'landscape', unit:'mm', format:[190,175], compress:true});
-      for (let p=0; p<TOTAL_PAGES; p++) {
-        if (p > 0) pdf.addPage([190,175], 'landscape');
+      const pdf = new jsPDF({orientation:'landscape', unit:'mm', format:[PAGE_W, PAGE_H], compress:true});
+      for (let p = 0; p < TOTAL_PAGES; p++) {
+        setStatus(`Подготавливаю PDF: страница ${p + 1} из ${TOTAL_PAGES}…`);
+        if (p > 0) pdf.addPage([PAGE_W, PAGE_H], 'landscape');
         const canvas = await drawPageToCanvas(pages[p]);
-        pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG', 0, 0, 190, 175, undefined, 'FAST');
-        setStatus(`Готовим PDF… Страница ${p+1} из ${TOTAL_PAGES}`);
-        await new Promise(r => setTimeout(r, 0));
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG', 0, 0, PAGE_W, PAGE_H, undefined, 'FAST');
+        await new Promise(resolve => setTimeout(resolve, 0));
       }
-      pdf.save('moy-fotoalbom.pdf');
+      pdf.save('мой-фотоальбом.pdf');
       setStatus('Готово! PDF скачан. Перед отправкой откройте его и проверьте страницы.');
     } catch (err) {
       console.error(err);
@@ -219,6 +233,7 @@ button:disabled { opacity:.35; cursor:default; }
       downloadBtn.disabled = false;
     }
   });
+
   buildPage();
 })();
 </script>
