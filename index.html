@@ -197,30 +197,3 @@ button:disabled { opacity:.35; cursor:default; }
     if (!window.jspdf || !window.jspdf.jsPDF) {
       setStatus('Не удалось загрузить модуль PDF. Проверьте подключение к интернету и попробуйте ещё раз.');
       return;
-    }
-    downloadBtn.disabled = true;
-    setStatus('Готовим PDF… Не закрывайте страницу.');
-    try {
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({orientation:'landscape', unit:'mm', format:[190,175], compress:true});
-      for (let p=0; p<TOTAL_PAGES; p++) {
-        if (p > 0) pdf.addPage([190,175], 'landscape');
-        const canvas = await drawPageToCanvas(pages[p]);
-        pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG', 0, 0, 190, 175, undefined, 'FAST');
-        setStatus(`Готовим PDF… Страница ${p+1} из ${TOTAL_PAGES}`);
-        await new Promise(r => setTimeout(r, 0));
-      }
-      pdf.save('moy-fotoalbom.pdf');
-      setStatus('Готово! PDF скачан. Перед отправкой откройте его и проверьте страницы.');
-    } catch (err) {
-      console.error(err);
-      setStatus('Не получилось создать PDF. Попробуйте загрузить меньше фотографий или открыть сайт в другом браузере.');
-    } finally {
-      downloadBtn.disabled = false;
-    }
-  });
-  buildPage();
-})();
-</script>
-</body>
-</html>
