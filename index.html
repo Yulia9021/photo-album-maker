@@ -263,45 +263,47 @@
     });
   }
 
-  async function drawPageToCanvas(pageData, pageIndex) {
-    const scale = 6;
-    const canvas = document.createElement('canvas');
-    canvas.width = PAGE_W * scale;
-    canvas.height = PAGE_H * scale;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  async function addPagePhotosToPdf(pdf, pageData, pageIndex) {
     const layout = layouts[pageData.layout];
     const horizontalShift = pageHorizontalShift(pageIndex);
 
     for (let i = 0; i < layout.length; i++) {
       const src = pageData.photos[i];
       if (!src) continue;
+
       const img = await loadImage(src);
       const b = layout[i];
-      const x = (COLLAGE_X + b.x + horizontalShift) * scale;
-      const y = (COLLAGE_Y + b.y) * scale;
-      const w = b.w * scale, h = b.h * scale;
-      const imgRatio = img.width / img.height, boxRatio = w / h;
-      let sw, sh, sx, sy;
+      const boxW = b.w;
+      const boxH = b.h;
+      const boxRatio = boxW / boxH;
+      const imgRatio = img.width / img.height;
       const focus = pageData.focus[i] || {x:0.5,y:0.5};
+
+      // Crop to the frame's aspect ratio at the original image's pixel resolution.
+      let sx = 0, sy = 0, sw = img.width, sh = img.height;
       if (imgRatio > boxRatio) {
-        sh = img.height; sw = sh * boxRatio;
+        sw = img.height * boxRatio;
         sx = Math.max(0, Math.min(img.width - sw, focus.x * img.width - sw / 2));
-        sy = 0;
       } else {
-        sw = img.width; sh = sw / boxRatio;
-        sx = 0;
+        sh = img.width / boxRatio;
         sy = Math.max(0, Math.min(img.height - sh, focus.y * img.height - sh / 2));
       }
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(x, y, w, h);
-      ctx.clip();
-      ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
-      ctx.restore();
+
+      const cropW = Math.max(1, Math.round(sw));
+      const cropH = Math.max(1, Math.round(sh));
+      const cropCanvas = document.createElement('canvas');
+      cropCanvas.width = cropW;
+      cropCanvas.height = cropH;
+      const cropCtx = cropCanvas.getContext('2d');
+      cropCtx.imageSmoothingEnabled = true;
+      cropCtx.imageSmoothingQuality = 'high';
+      cropCtx.drawImage(img, sx, sy, sw, sh, 0, 0, cropW, cropH);
+
+      const x = COLLAGE_X + b.x + horizontalShift;
+      const y = COLLAGE_Y + b.y;
+      // PNG avoids adding another lossy JPEG-compression step.
+      pdf.addImage(cropCanvas.toDataURL('image/png'), 'PNG', x, y, boxW, boxH);
     }
-    return canvas;
   }
 
   downloadBtn.addEventListener('click', async () => {
@@ -316,8 +318,7 @@
       for (let p = 0; p < TOTAL_PAGES; p++) {
         setStatus(`Подготавливаю PDF: страница ${p + 1} из ${TOTAL_PAGES}…`);
         if (p > 0) pdf.addPage([PAGE_W, PAGE_H], 'landscape');
-        const canvas = await drawPageToCanvas(pages[p], p);
-        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, PAGE_W, PAGE_H, undefined, 'FAST');
+        await addPagePhotosToPdf(pdf, pages[p], p);
         await new Promise(resolve => setTimeout(resolve, 0));
       }
       pdf.save('мой-фотоальбом.pdf');
