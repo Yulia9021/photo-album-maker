@@ -71,6 +71,9 @@
   <p class="hint">Нажмите на пустую рамку, чтобы добавить фото. Чтобы изменить кадрирование, зажмите фото и двигайте пальцем или мышью. Для замены нажмите «Заменить фото».</p>
   <div class="page-wrap"><div id="albumPage" aria-label="Страница фотоальбома"></div></div>
   <div class="toolbar" style="margin-top:12px">
+    <button id="saveProjectBtn" type="button">Сохранить проект для продавца</button>
+    <button id="openProjectBtn" type="button">Открыть сохранённый проект</button>
+    <input id="projectFileInput" type="file" accept=".json,application/json" style="display:none">
     <button id="downloadBtn" type="button">Скачать альбом в PDF</button>
   </div>
   <div class="status" id="status" aria-live="polite"></div>
@@ -87,6 +90,9 @@
   const prevBtn = document.getElementById('prevBtn');
   const nextBtn = document.getElementById('nextBtn');
   const downloadBtn = document.getElementById('downloadBtn');
+  const saveProjectBtn = document.getElementById('saveProjectBtn');
+  const openProjectBtn = document.getElementById('openProjectBtn');
+  const projectFileInput = document.getElementById('projectFileInput');
   const statusEl = document.getElementById('status');
   let currentPage = 0;
   let activeDrag = null;
@@ -252,6 +258,85 @@
   });
   nextBtn.addEventListener('click', () => {
     if (currentPage < TOTAL_PAGES - 1) { currentPage++; buildPage(); setStatus(''); }
+  });
+
+  // Сохранение проекта в один JSON-файл: фотографии (data URL) + расположение/кадрирование.
+  saveProjectBtn.addEventListener('click', () => {
+    try {
+      const project = {
+        format: 'photo-album-project',
+        version: 1,
+        pageWidthMm: PAGE_W,
+        pageHeightMm: PAGE_H,
+        totalPages: TOTAL_PAGES,
+        savedAt: new Date().toISOString(),
+        pages: pages.map(page => ({
+          layout: page.layout,
+          photos: page.photos,
+          focus: page.focus
+        }))
+      };
+      const blob = new Blob([JSON.stringify(project)], {type: 'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'proekt-fotoalboma.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setStatus('Проект сохранён в файл. Отправьте этот файл продавцу через Kaspi, если чат принимает файл такого размера.');
+    } catch (err) {
+      console.error(err);
+      setStatus('Не удалось сохранить проект. Попробуйте загрузить меньше фотографий или открыть сайт в другом браузере.');
+    }
+  });
+
+  openProjectBtn.addEventListener('click', () => projectFileInput.click());
+
+  projectFileInput.addEventListener('change', async e => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const project = JSON.parse(text);
+      if (project.format !== 'photo-album-project' ||
+          project.version !== 1 ||
+          !Array.isArray(project.pages) ||
+          project.pages.length !== TOTAL_PAGES) {
+        throw new Error('Неподходящий файл проекта');
+      }
+      for (let i = 0; i < TOTAL_PAGES; i++) {
+        const expectedLayout = i % layouts.length;
+        const item = project.pages[i];
+        if (!item || item.layout !== expectedLayout ||
+            !Array.isArray(item.photos) || item.photos.length !== layouts[expectedLayout].length ||
+            !Array.isArray(item.focus) || item.focus.length !== layouts[expectedLayout].length) {
+          throw new Error('Структура страниц не совпадает с конструктором');
+        }
+        for (const photo of item.photos) {
+          if (photo !== null && (typeof photo !== 'string' || !photo.startsWith('data:image/'))) {
+            throw new Error('В проекте обнаружено некорректное фото');
+          }
+        }
+      }
+      project.pages.forEach((item, i) => {
+        pages[i].layout = item.layout;
+        pages[i].photos = item.photos;
+        pages[i].focus = item.focus.map(f => ({
+          x: Math.max(0, Math.min(1, Number(f && f.x) || 0.5)),
+          y: Math.max(0, Math.min(1, Number(f && f.y) || 0.5))
+        }));
+      });
+      currentPage = 0;
+      buildPage();
+      setStatus('Проект загружен. Проверьте страницы и сохраните PDF.');
+    } catch (err) {
+      console.error(err);
+      setStatus('Не удалось открыть этот проект. Проверьте, что выбран файл, сохранённый из нашего конструктора.');
+    } finally {
+      projectFileInput.value = '';
+    }
   });
 
   function loadImage(src) {
