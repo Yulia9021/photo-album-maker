@@ -264,7 +264,7 @@
   }
 
   async function drawPageToCanvas(pageData, pageIndex) {
-    const scale = 4;
+    const scale = 6;
     const canvas = document.createElement('canvas');
     canvas.width = PAGE_W * scale;
     canvas.height = PAGE_H * scale;
@@ -317,7 +317,7 @@
         setStatus(`Подготавливаю PDF: страница ${p + 1} из ${TOTAL_PAGES}…`);
         if (p > 0) pdf.addPage([PAGE_W, PAGE_H], 'landscape');
         const canvas = await drawPageToCanvas(pages[p], p);
-        pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG', 0, 0, PAGE_W, PAGE_H, undefined, 'FAST');
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, PAGE_W, PAGE_H, undefined, 'FAST');
         await new Promise(resolve => setTimeout(resolve, 0));
       }
       pdf.save('мой-фотоальбом.pdf');
