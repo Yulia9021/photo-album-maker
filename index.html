@@ -74,7 +74,7 @@
     <button id="downloadBtn" type="button">Скачать альбом в PDF</button>
   </div>
   <div class="status" id="status" aria-live="polite"></div>
-  <div class="bottom-note">Размер листа 210 × 185 мм. На нечётных страницах макет сдвигается на 5 мм вправо, чтобы оставить дополнительное место слева под пружину; на чётных — на 5 мм влево, чтобы оставить место справа. Размеры рамок и раскладки сохранены. Фотографии остаются в браузере и не загружаются на сайт.</div>
+  <div class="bottom-note">Размер листа 210 × 185 мм. В PDF добавлен белый прямоугольник на весь лист, чтобы при импорте в CorelDRAW сохранялись границы страницы и пустые отступы. На нечётных страницах макет сдвигается на 5 мм вправо, на чётных — на 5 мм влево. Фотографии остаются в браузере и не загружаются на сайт.</div>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
@@ -323,6 +323,10 @@
       for (let p = 0; p < TOTAL_PAGES; p++) {
         setStatus(`Подготавливаю PDF: страница ${p + 1} из ${TOTAL_PAGES}…`);
         if (p > 0) pdf.addPage([PAGE_W, PAGE_H], 'landscape');
+        // Add an explicit full-page white rectangle so CorelDRAW can retain
+        // the complete 210 x 185 mm page bounds, including blank margins.
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, 0, PAGE_W, PAGE_H, 'F');
         await addPagePhotosToPdf(pdf, pages[p], p);
         await new Promise(resolve => setTimeout(resolve, 0));
       }
