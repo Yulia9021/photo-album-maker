@@ -289,8 +289,11 @@
         sy = Math.max(0, Math.min(img.height - sh, focus.y * img.height - sh / 2));
       }
 
-      const cropW = Math.max(1, Math.round(sw));
-      const cropH = Math.max(1, Math.round(sh));
+      // Render only as many pixels as needed for 300 dpi at the printed frame size.
+      // This avoids keeping huge full-resolution crop canvases in memory.
+      const PRINT_DPI = 300;
+      const cropW = Math.max(1, Math.round(boxW * PRINT_DPI / 25.4));
+      const cropH = Math.max(1, Math.round(boxH * PRINT_DPI / 25.4));
       const cropCanvas = document.createElement('canvas');
       cropCanvas.width = cropW;
       cropCanvas.height = cropH;
@@ -301,8 +304,10 @@
 
       const x = COLLAGE_X + b.x + horizontalShift;
       const y = COLLAGE_Y + b.y;
-      // PNG avoids adding another lossy JPEG-compression step.
-      pdf.addImage(cropCanvas.toDataURL('image/png'), 'PNG', x, y, boxW, boxH);
+      // High-quality JPEG at print resolution balances sharpness and memory use.
+      pdf.addImage(cropCanvas.toDataURL('image/jpeg', 0.98), 'JPEG', x, y, boxW, boxH, undefined, 'FAST');
+      cropCanvas.width = 1;
+      cropCanvas.height = 1;
     }
   }
 
