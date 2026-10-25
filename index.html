@@ -73,7 +73,8 @@
   <div class="toolbar" style="margin-top:12px">
     <input id="projectFileInput" type="file" accept=".json,application/json" style="display:none">
     <button id="downloadBtn" type="button">Скачать альбом в PDF</button>
-    <button id="orderWhatsappBtn" type="button" style="background:#168a45">Скачать PDF и отправить заказ</button>
+    <button id="orderWhatsappBtn" type="button" style="background:#168a45">Скачать PDF для заказа</button>
+    <button id="openWhatsappBtn" type="button" style="background:#168a45;display:none">Теперь открыть WhatsApp</button>
   </div>
   <div class="status" id="status" aria-live="polite"></div>
   <div class="bottom-note">Размер листа 210 × 185 мм. В PDF добавлен белый прямоугольник на весь лист, чтобы при импорте в CorelDRAW сохранялись границы страницы и пустые отступы. На нечётных страницах макет сдвигается на 5 мм вправо, на чётных — на 5 мм влево. Фотографии обрабатываются в браузере и не загружаются на сайт.</div>
@@ -91,6 +92,7 @@
   const downloadBtn = document.getElementById('downloadBtn');
   const projectFileInput = document.getElementById('projectFileInput');
   const orderWhatsappBtn = document.getElementById('orderWhatsappBtn');
+  const openWhatsappBtn = document.getElementById('openWhatsappBtn');
   const statusEl = document.getElementById('status');
   let currentPage = 0;
   let activeDrag = null;
@@ -251,15 +253,14 @@
     if (inputs[i]) inputs[i].click();
   }
 
-  // One-click workflow: create/download the PDF, then open the seller's WhatsApp chat.
-  // The buyer must attach the downloaded PDF manually; WhatsApp does not allow
-  // a normal website button to attach a file to a chat automatically.
+  // Сначала скачиваем PDF. WhatsApp открывается только после отдельного нажатия.
   orderWhatsappBtn.addEventListener('click', async () => {
     if (!window.jspdf || !window.jspdf.jsPDF) {
       setStatus('Не удалось загрузить PDF-модуль. Проверьте подключение к интернету и обновите страницу.');
       return;
     }
     orderWhatsappBtn.disabled = true;
+    openWhatsappBtn.style.display = 'none';
     setStatus('Подготавливаю PDF для заказа…');
     try {
       const { jsPDF } = window.jspdf;
@@ -273,17 +274,21 @@
         await new Promise(resolve => setTimeout(resolve, 0));
       }
       pdf.save('мой-фотоальбом.pdf');
-      const phone = '77089813928';
-      const message = 'Здравствуйте! Я собрал(а) фотоальбом в конструкторе. Прикрепляю PDF-файл заказа.';
-      const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-      setStatus('PDF скачивается. Сейчас откроется WhatsApp: прикрепите скачанный файл «мой-фотоальбом.pdf» и нажмите «Отправить».');
-      window.open(url, '_blank', 'noopener,noreferrer');
+      openWhatsappBtn.style.display = 'inline-block';
+      setStatus('PDF подготовлен и отправлен на скачивание. Сначала проверьте папку «Загрузки», затем нажмите «Теперь открыть WhatsApp».');
     } catch (err) {
       console.error(err);
-      setStatus('Не получилось создать PDF. Попробуйте загрузить меньше фотографий или открыть сайт в другом браузере.');
+      setStatus('Не получилось создать PDF. Попробуйте открыть сайт в другом браузере.');
     } finally {
       orderWhatsappBtn.disabled = false;
     }
+  });
+
+  openWhatsappBtn.addEventListener('click', () => {
+    const phone = '77089813928';
+    const message = 'Здравствуйте! Я собрал(а) фотоальбом в конструкторе. Прикрепляю PDF-файл заказа.';
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
   });
 
   prevBtn.addEventListener('click', () => {
