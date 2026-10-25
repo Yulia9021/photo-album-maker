@@ -34,6 +34,10 @@
   .slot:not(.has-photo) .replace { display:none; }
   .status { text-align:center; font-size:13px; color:#555; min-height:20px; margin-top:8px; }
   .bottom-note { text-align:center; color:#777; font-size:12px; margin-top:10px; }
+  .action-toolbar { gap:12px; }
+  .primary-action { background:#333; min-height:48px; font-size:16px; font-weight:700; padding:13px 20px; }
+  .send-action { background:#168a45; min-height:54px; font-size:17px; font-weight:700; padding:15px 22px; box-shadow:0 3px 8px #0002; }
+  .send-action:hover { background:#11783b; }
   @media(max-width:700px) {
     header { padding:12px 10px 6px; }
     h1 { font-size:21px; }
@@ -44,6 +48,8 @@
     .counter { min-width:105px; font-size:13px; }
     .hint { font-size:12px; line-height:1.4; margin:8px 0 10px; }
     .bottom-note { line-height:1.4; }
+    .action-toolbar { flex-direction:column; align-items:stretch; }
+    .action-toolbar button { width:100%; }
   }
   @page { size:210mm 185mm; margin:0; }
   @media print {
@@ -70,11 +76,10 @@
   </div>
   <p class="hint">Нажмите на пустую рамку, чтобы добавить фото. Чтобы изменить кадрирование, зажмите фото и двигайте пальцем или мышью. Для замены нажмите «Заменить фото».</p>
   <div class="page-wrap"><div id="albumPage" aria-label="Страница фотоальбома"></div></div>
-  <div class="toolbar" style="margin-top:12px">
-    <input id="projectFileInput" type="file" accept=".json,application/json" style="display:none">
-    <button id="downloadBtn" type="button">Скачать альбом в PDF</button>
-    <button id="orderWhatsappBtn" type="button" style="background:#168a45">Скачать PDF для заказа</button>
-    <button id="openWhatsappBtn" type="button" style="background:#168a45;display:none">Теперь открыть WhatsApp</button>
+
+  <div class="toolbar action-toolbar" style="margin-top:12px">
+    <button id="savePdfBtn" class="primary-action" type="button">📄 Сохранить документ в PDF</button>
+    <button id="sendDocumentBtn" class="send-action" type="button" style="display:none">📤 Отправить документ продавцу</button>
   </div>
   <div class="status" id="status" aria-live="polite"></div>
   <div class="bottom-note">Размер листа 210 × 185 мм. В PDF добавлен белый прямоугольник на весь лист, чтобы при импорте в CorelDRAW сохранялись границы страницы и пустые отступы. На нечётных страницах макет сдвигается на 5 мм вправо, на чётных — на 5 мм влево. Фотографии обрабатываются в браузере и не загружаются на сайт.</div>
@@ -84,18 +89,17 @@
 (() => {
   const TOTAL_PAGES = 30;
   const PAGE_W = 210, PAGE_H = 185, COLLAGE_X = 10, COLLAGE_Y = 5;
-  const BINDING_EXTRA = 5; // 0,5 см = 5 мм
+  const BINDING_EXTRA = 5;
   const pageEl = document.getElementById('albumPage');
   const counter = document.getElementById('pageCounter');
   const prevBtn = document.getElementById('prevBtn');
   const nextBtn = document.getElementById('nextBtn');
-  const downloadBtn = document.getElementById('downloadBtn');
-  const projectFileInput = document.getElementById('projectFileInput');
-  const orderWhatsappBtn = document.getElementById('orderWhatsappBtn');
-  const openWhatsappBtn = document.getElementById('openWhatsappBtn');
+  const savePdfBtn = document.getElementById('savePdfBtn');
+  const sendDocumentBtn = document.getElementById('sendDocumentBtn');
   const statusEl = document.getElementById('status');
   let currentPage = 0;
   let activeDrag = null;
+  let pdfReady = false;
 
   const layouts = [
     [{x:5,y:5,w:62.5,h:80},{x:5,y:90,w:62.5,h:80},{x:72.5,y:5,w:112.5,h:165}],
@@ -115,8 +119,6 @@
 
   function setStatus(text) { statusEl.textContent = text || ''; }
 
-  // Нумерация для пользователя начинается с 1:
-  // нечётные страницы сдвигаем вправо, чётные — влево.
   function pageHorizontalShift(pageIndex) {
     return ((pageIndex + 1) % 2 === 1) ? BINDING_EXTRA : -BINDING_EXTRA;
   }
@@ -227,6 +229,8 @@
         reader.onload = () => {
           data.photos[i] = reader.result;
           data.focus[i] = {x:0.5,y:0.5};
+          pdfReady = false;
+          sendDocumentBtn.style.display = 'none';
           buildPage();
           setStatus('Фото добавлено. Зажмите его и двигайте пальцем или мышью, чтобы настроить кадрирование.');
         };
@@ -253,42 +257,48 @@
     if (inputs[i]) inputs[i].click();
   }
 
-  // Сначала скачиваем PDF. WhatsApp открывается только после отдельного нажатия.
-  orderWhatsappBtn.addEventListener('click', async () => {
+  async function createAlbumPdf() {
     if (!window.jspdf || !window.jspdf.jsPDF) {
-      setStatus('Не удалось загрузить PDF-модуль. Проверьте подключение к интернету и обновите страницу.');
-      return;
+      throw new Error('Не удалось загрузить PDF-модуль. Проверьте подключение к интернету и обновите страницу.');
     }
-    orderWhatsappBtn.disabled = true;
-    openWhatsappBtn.style.display = 'none';
-    setStatus('Подготавливаю PDF для заказа…');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({orientation:'landscape', unit:'mm', format:[PAGE_W, PAGE_H], compress:true});
+    for (let p = 0; p < TOTAL_PAGES; p++) {
+      setStatus(`Подготавливаю PDF: страница ${p + 1} из ${TOTAL_PAGES}…`);
+      if (p > 0) pdf.addPage([PAGE_W, PAGE_H], 'landscape');
+      pdf.setFillColor(255, 255, 255);
+      pdf.rect(0, 0, PAGE_W, PAGE_H, 'F');
+      await addPagePhotosToPdf(pdf, pages[p], p);
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    return pdf;
+  }
+
+  savePdfBtn.addEventListener('click', async () => {
+    savePdfBtn.disabled = true;
+    sendDocumentBtn.style.display = 'none';
+    pdfReady = false;
+    setStatus('Подготавливаю документ PDF…');
     try {
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({orientation:'landscape', unit:'mm', format:[PAGE_W, PAGE_H], compress:true});
-      for (let p = 0; p < TOTAL_PAGES; p++) {
-        setStatus(`Подготавливаю PDF для заказа: страница ${p + 1} из ${TOTAL_PAGES}…`);
-        if (p > 0) pdf.addPage([PAGE_W, PAGE_H], 'landscape');
-        pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, 0, PAGE_W, PAGE_H, 'F');
-        await addPagePhotosToPdf(pdf, pages[p], p);
-        await new Promise(resolve => setTimeout(resolve, 0));
-      }
+      const pdf = await createAlbumPdf();
       pdf.save('мой-фотоальбом.pdf');
-      openWhatsappBtn.style.display = 'inline-block';
-      setStatus('PDF подготовлен и отправлен на скачивание. Сначала проверьте папку «Загрузки», затем нажмите «Теперь открыть WhatsApp».');
+      pdfReady = true;
+      sendDocumentBtn.style.display = 'inline-block';
+      setStatus('Документ подготовлен и отправлен на скачивание. Теперь нажмите «Отправить документ продавцу» и прикрепите PDF из папки «Загрузки».');
     } catch (err) {
       console.error(err);
-      setStatus('Не получилось создать PDF. Попробуйте открыть сайт в другом браузере.');
+      setStatus(err.message || 'Не получилось создать PDF. Попробуйте загрузить меньше фотографий или открыть сайт в другом браузере.');
     } finally {
-      orderWhatsappBtn.disabled = false;
+      savePdfBtn.disabled = false;
     }
   });
 
-  openWhatsappBtn.addEventListener('click', () => {
+  sendDocumentBtn.addEventListener('click', () => {
     const phone = '77089813928';
-    const message = 'Здравствуйте! Я собрал(а) фотоальбом в конструкторе. Прикрепляю PDF-файл заказа.';
+    const message = 'Здравствуйте! Отправляю PDF-документ с макетом моего фотоальбома.';
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
+    setStatus('В WhatsApp прикрепите сохранённый файл «мой-фотоальбом.pdf» из папки «Загрузки» и отправьте его продавцу.');
   });
 
   prevBtn.addEventListener('click', () => {
@@ -323,7 +333,6 @@
       const imgRatio = img.width / img.height;
       const focus = pageData.focus[i] || {x:0.5,y:0.5};
 
-      // Crop to the frame's aspect ratio at the original image's pixel resolution.
       let sx = 0, sy = 0, sw = img.width, sh = img.height;
       if (imgRatio > boxRatio) {
         sw = img.height * boxRatio;
@@ -333,8 +342,6 @@
         sy = Math.max(0, Math.min(img.height - sh, focus.y * img.height - sh / 2));
       }
 
-      // Render only as many pixels as needed for 300 dpi at the printed frame size.
-      // This avoids keeping huge full-resolution crop canvases in memory.
       const PRINT_DPI = 300;
       const cropW = Math.max(1, Math.round(boxW * PRINT_DPI / 25.4));
       const cropH = Math.max(1, Math.round(boxH * PRINT_DPI / 25.4));
@@ -348,41 +355,11 @@
 
       const x = COLLAGE_X + b.x + horizontalShift;
       const y = COLLAGE_Y + b.y;
-      // High-quality JPEG at print resolution balances sharpness and memory use.
       pdf.addImage(cropCanvas.toDataURL('image/jpeg', 0.90), 'JPEG', x, y, boxW, boxH, undefined, 'FAST');
       cropCanvas.width = 1;
       cropCanvas.height = 1;
     }
   }
-
-  downloadBtn.addEventListener('click', async () => {
-    if (!window.jspdf || !window.jspdf.jsPDF) {
-      setStatus('Не удалось загрузить PDF-модуль. Проверьте подключение к интернету и обновите страницу.');
-      return;
-    }
-    downloadBtn.disabled = true;
-    try {
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({orientation:'landscape', unit:'mm', format:[PAGE_W, PAGE_H], compress:true});
-      for (let p = 0; p < TOTAL_PAGES; p++) {
-        setStatus(`Подготавливаю PDF: страница ${p + 1} из ${TOTAL_PAGES}…`);
-        if (p > 0) pdf.addPage([PAGE_W, PAGE_H], 'landscape');
-        // Add an explicit full-page white rectangle so CorelDRAW can retain
-        // the complete 210 x 185 mm page bounds, including blank margins.
-        pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, 0, PAGE_W, PAGE_H, 'F');
-        await addPagePhotosToPdf(pdf, pages[p], p);
-        await new Promise(resolve => setTimeout(resolve, 0));
-      }
-      pdf.save('мой-фотоальбом.pdf');
-      setStatus('Готово! PDF скачан. Перед отправкой откройте его и проверьте страницы.');
-    } catch (err) {
-      console.error(err);
-      setStatus('Не получилось создать PDF. Попробуйте загрузить меньше фотографий или открыть сайт в другом браузере.');
-    } finally {
-      downloadBtn.disabled = false;
-    }
-  });
 
   window.addEventListener('resize', fitPageToScreen);
   window.addEventListener('orientationchange', () => setTimeout(fitPageToScreen, 150));
