@@ -74,7 +74,9 @@
     <div class="counter" id="pageCounter">Страница 1 из 30</div>
     <button id="nextBtn" type="button">Вперёд →</button>
   </div>
-  <p class="hint">Нажмите на пустую рамку, чтобы добавить фото. Чтобы изменить кадрирование, зажмите фото и двигайте пальцем или мышью. Для замены нажмите «Заменить фото».</p>
+  <p class="hint">Нажмите на пустую рамку, чтобы добавить фото.
+
+Чтобы изменить кадрирование, зажмите фото и двигайте пальцем или мышью. Для замены нажмите «Заменить фото».</p>
   <div class="page-wrap"><div id="albumPage" aria-label="Страница фотоальбома"></div></div>
 
   <div class="toolbar action-toolbar" style="margin-top:12px">
@@ -85,6 +87,7 @@
   <div class="bottom-note">Размер листа 210 × 185 мм. В PDF добавлен белый прямоугольник на весь лист, чтобы при импорте в CorelDRAW сохранялись границы страницы и пустые отступы. На нечётных страницах макет сдвигается на 5 мм вправо, на чётных — на 5 мм влево. Фотографии обрабатываются в браузере и не загружаются на сайт.</div>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 <script>
 (() => {
   const TOTAL_PAGES = 30;
@@ -101,14 +104,20 @@
   let activeDrag = null;
   let pdfReady = false;
 
+  // Макеты задаются внутри области коллажа 180 × 165 мм.
+  // Третий шаблон повторяет второй: одна фотография на весь макет.
+  // Пятый шаблон: 4 фотографии — горизонтальная, вертикальная, вертикальная, горизонтальная.
   const layouts = [
     [{x:5,y:5,w:62.5,h:80},{x:5,y:90,w:62.5,h:80},{x:72.5,y:5,w:112.5,h:165}],
     [{x:5,y:5,w:180,h:165}],
-    [{x:5,y:5,w:100,h:85},{x:110,y:5,w:75,h:40},{x:110,y:50,w:75,h:40},
-     {x:5,y:95,w:56.67,h:75},{x:66.67,y:95,w:56.66,h:75},{x:128.33,y:95,w:56.67,h:75}],
+    [{x:5,y:5,w:180,h:165}],
     [{x:5,y:5,w:87.5,h:80},{x:97.5,y:5,w:87.5,h:80},{x:5,y:90,w:87.5,h:80},{x:97.5,y:90,w:87.5,h:80}],
-    [{x:5,y:5,w:45,h:35},{x:55,y:5,w:45,h:35},{x:105,y:5,w:80,h:75},
-     {x:5,y:45,w:95,h:125},{x:105,y:85,w:80,h:85}]
+    [
+      {x:5,y:5,w:82.5,h:65},
+      {x:92.5,y:5,w:92.5,h:75},
+      {x:5,y:80,w:62.5,h:90},
+      {x:72.5,y:85,w:112.5,h:85}
+    ]
   ];
 
   const pages = Array.from({length: TOTAL_PAGES}, (_, i) => ({
@@ -221,20 +230,25 @@
 
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = 'image/*';
-      input.addEventListener('change', e => {
+      input.accept = 'image/*,.heic,.heif';
+      input.addEventListener('change', async e => {
         const file = e.target.files && e.target.files[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-          data.photos[i] = reader.result;
+        try {
+          setStatus('Обрабатываю фотографию…');
+          const dataUrl = await readImageFile(file);
+          data.photos[i] = dataUrl;
           data.focus[i] = {x:0.5,y:0.5};
           pdfReady = false;
           sendDocumentBtn.style.display = 'none';
           buildPage();
           setStatus('Фото добавлено. Зажмите его и двигайте пальцем или мышью, чтобы настроить кадрирование.');
-        };
-        reader.readAsDataURL(file);
+        } catch (err) {
+          console.error(err);
+          setStatus('Не удалось открыть это фото. Попробуйте сохранить его в JPG и загрузить снова.');
+        } finally {
+          input.value = '';
+        }
       });
       slot.appendChild(input);
 
@@ -250,6 +264,25 @@
     prevBtn.disabled = currentPage === 0;
     nextBtn.disabled = currentPage === TOTAL_PAGES - 1;
     fitPageToScreen();
+  }
+
+  async function readImageFile(file) {
+    const extension = (file.name.split('.').pop() || '').toLowerCase();
+    const isHeic = file.type === 'image/heic' || file.type === 'image/heif' || extension === 'heic' || extension === 'heif';
+    let usableFile = file;
+    if (isHeic) {
+      if (typeof window.heic2any !== 'function') {
+        throw new Error('HEIC-конвертер не загрузился');
+      }
+      const converted = await window.heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+      usableFile = Array.isArray(converted) ? converted[0] : converted;
+    }
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Ошибка чтения файла'));
+      reader.readAsDataURL(usableFile);
+    });
   }
 
   function choosePhoto(i) {
