@@ -87,7 +87,7 @@
   <div class="bottom-note">Размер листа 210 × 185 мм. В PDF добавлен белый прямоугольник на весь лист, чтобы при импорте в CorelDRAW сохранялись границы страницы и пустые отступы. На нечётных страницах макет сдвигается на 5 мм вправо, на чётных — на 5 мм влево. Фотографии обрабатываются в браузере и не загружаются на сайт.</div>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+
 <script>
 (() => {
   const TOTAL_PAGES = 30;
@@ -245,7 +245,7 @@
           setStatus('Фото добавлено. Зажмите его и двигайте пальцем или мышью, чтобы настроить кадрирование.');
         } catch (err) {
           console.error(err);
-          setStatus('Не удалось открыть это фото. Попробуйте сохранить его в JPG и загрузить снова.');
+          setStatus('Не удалось открыть фото: ' + (err && err.message ? err.message : 'неизвестная ошибка') + '. Проверьте интернет и попробуйте ещё раз.');
         } finally {
           input.value = '';
         }
@@ -266,16 +266,62 @@
     fitPageToScreen();
   }
 
-  async function readImageFile(file) {
+  let heicLibraryPromise = null;
+
+  async function loadHeicConverter() {
+    if (typeof window.heic2any === 'function') return window.heic2any;
+    if (!heicLibraryPromise) {
+      heicLibraryPromise = (async () => {
+        const urls = [
+          'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js',
+          'https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js'
+        ];
+        let lastError;
+        for (const url of urls) {
+          try {
+            await new Promise((resolve, reject) => {
+              const script = document.createElement('script');
+              script.src = url;
+              script.async = true;
+              script.onload = resolve;
+              script.onerror = () => reject(new Error('Не удалось загрузить библиотеку конвертации'));
+              document.head.appendChild(script);
+            });
+            if (typeof window.heic2any === 'function') return window.heic2any;
+            throw new Error('Библиотека загрузилась, но функция конвертации не найдена');
+          } catch (err) { lastError = err; }
+        }
+        throw lastError || new Error('Не удалось загрузить HEIC-конвертер');
+      })();
+    }
+    return await heicLibraryPromise;
+  }
+
+  async function isHeicFile(file) {
     const extension = (file.name.split('.').pop() || '').toLowerCase();
-    const isHeic = file.type === 'image/heic' || file.type === 'image/heif' || extension === 'heic' || extension === 'heif';
-    let usableFile = file;
-    if (isHeic) {
-      if (typeof window.heic2any !== 'function') {
-        throw new Error('HEIC-конвертер не загрузился');
+    if (['heic', 'heif', 'heic-sequence', 'heif-sequence'].includes(extension)) return true;
+    if (/image\/(heic|heif|heic-sequence|heif-sequence)/i.test(file.type || '')) return true;
+    // Некоторые устройства и браузеры передают HEIC без MIME-типа и с неверным расширением.
+    try {
+      const bytes = new Uint8Array(await file.slice(0, 32).arrayBuffer());
+      if (bytes.length >= 12) {
+        const brand = String.fromCharCode(...bytes.slice(8, 12));
+        return ['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1', 'msf1'].includes(brand);
       }
-      const converted = await window.heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+    } catch (_) {}
+    return false;
+  }
+
+  async function readImageFile(file) {
+    let usableFile = file;
+    if (await isHeicFile(file)) {
+      setStatus('Фото HEIC обнаружено. Загружаю конвертер и преобразую в JPG…');
+      const converter = await loadHeicConverter();
+      const converted = await converter({ blob: file, toType: 'image/jpeg', quality: 0.92 });
       usableFile = Array.isArray(converted) ? converted[0] : converted;
+      if (!(usableFile instanceof Blob) || !usableFile.size) {
+        throw new Error('Не удалось преобразовать HEIC-файл в JPG');
+      }
     }
     return await new Promise((resolve, reject) => {
       const reader = new FileReader();
